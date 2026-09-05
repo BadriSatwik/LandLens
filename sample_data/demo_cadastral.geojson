@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "survey_number": "145/2",
+        "parcel_id": "PARCEL-145-2-IMPORTED",
+        "village": "Kamareddy",
+        "district": "Nizamabad",
+        "area": "2.5 acres",
+        "center": [78.3374, 18.3215]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[78.3358, 18.3204], [78.3390, 18.3204], [78.3396, 18.3226], [78.3370, 18.3234], [78.3358, 18.3204]]]
+      }
+    }
+  ]
+}

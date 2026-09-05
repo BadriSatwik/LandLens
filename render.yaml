@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: landverify-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: LANDVERIFY_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: LANDVERIFY_LRMS_URL
+        sync: false
+      - key: LANDVERIFY_DILRMP_URL
+        sync: false
+      - key: LANDVERIFY_GOV_API_URL
+        sync: false
+
+  - type: web
+    name: landverify
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: VITE_API_URL
+        sync: false
