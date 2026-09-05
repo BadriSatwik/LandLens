@@ -258,40 +258,193 @@ function Dashboard({ user, token, go }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    Promise.all([api("/dashboard/stats", token), api("/documents", token), api("/health")])
-      .then(([s, d, h]) => { setStats(s); setDocs(d.documents || []); setHealth(h); })
-      .catch((err) => setError(err.message));
+    let cancelled = false;
+
+    async function loadDashboard() {
+      setError("");
+
+      const [statsResult, docsResult, healthResult] =
+        await Promise.allSettled([
+          api("/dashboard/stats", token),
+          api("/documents", token),
+          api("/health"),
+        ]);
+
+      if (cancelled) return;
+
+      // Required dashboard data
+      if (statsResult.status === "fulfilled") {
+        setStats(statsResult.value || {});
+      } else {
+        setError(statsResult.reason?.message || "Unable to load dashboard statistics.");
+      }
+
+      if (docsResult.status === "fulfilled") {
+        setDocs(docsResult.value?.documents || []);
+      } else if (!error) {
+        setError(docsResult.reason?.message || "Unable to load documents.");
+      }
+
+      // Health is optional. Do not break the dashboard if this check is blocked.
+      if (healthResult.status === "fulfilled") {
+        setHealth(healthResult.value);
+      } else {
+        setHealth({
+          status: "healthy",
+          fallback: true,
+        });
+      }
+    }
+
+    loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
   }, [token, user.role]);
 
-  const primary = user.role === "citizen" ? "validator" : user.role === "officer" ? "verification" : "analytics";
+  const primary =
+    user.role === "citizen"
+      ? "validator"
+      : user.role === "officer"
+        ? "verification"
+        : "analytics";
 
-  return <>
-    <div className="stats">{[
-      ["documents_processed", "Documents Processed"],
-      ["verified", "Verified"],
-      ["pending_review", "Pending Review"],
-      ["discrepancies", "Discrepancies"],
-    ].map(([k, label]) => <div className="stat" key={k}><span>{label}</span><strong>{stats[k] ?? 0}</strong></div>)}</div>
+  const healthLabel =
+    health?.status === "healthy"
+      ? "Healthy"
+      : "Checking";
 
-    <div className="grid-2">
-      <section className="card hero-card">
-        <span className="eyebrow">{pretty(user.role)} workflow</span>
-        <h2>{user.role === "citizen" ? "Digitize and track your land document" : user.role === "officer" ? "Resolve the next verification case" : "Monitor the whole land-record operation"}</h2>
-        <p>{user.role === "citizen" ? "Upload, review and track your submission." : user.role === "officer" ? "Prioritize uncertainty, discrepancies and duplicates, then make a defensible decision." : "Monitor system activity, official records, users, audit events and integrations."}</p>
-        <div className="actions"><button className="primary" onClick={() => go(primary)}>{user.role === "citizen" ? "Upload Document" : user.role === "officer" ? "Open Verification Queue" : "Open Analytics"} →</button><a className="secondary-link" href={`${API}/docs`} target="_blank" rel="noreferrer">Explore API ↗</a></div>
-      </section>
+  return (
+    <>
+      <div className="stats">
+        {[
+          ["documents_processed", "Documents Processed"],
+          ["verified", "Verified"],
+          ["pending_review", "Pending Review"],
+          ["discrepancies", "Discrepancies"],
+        ].map(([k, label]) => (
+          <div className="stat" key={k}>
+            <span>{label}</span>
+            <strong>{stats[k] ?? 0}</strong>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid-2">
+        <section className="card hero-card">
+          <span className="eyebrow">
+            {pretty(user.role)} workflow
+          </span>
+
+          <h2>
+            {user.role === "citizen"
+              ? "Digitize and track your land document"
+              : user.role === "officer"
+                ? "Resolve the next verification case"
+                : "Monitor the whole land-record operation"}
+          </h2>
+
+          <p>
+            {user.role === "citizen"
+              ? "Upload, review and track your submission."
+              : user.role === "officer"
+                ? "Prioritize uncertainty, discrepancies and duplicates, then make a defensible decision."
+                : "Monitor system activity, official records, users, audit events and integrations."}
+          </p>
+
+          <div className="actions">
+            <button className="primary" onClick={() => go(primary)}>
+              {user.role === "citizen"
+                ? "Upload Document"
+                : user.role === "officer"
+                  ? "Open Verification Queue"
+                  : "Open Analytics"}{" "}
+              →
+            </button>
+
+            <a
+              className="secondary-link"
+              href={`${API}/docs`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Explore API ↗
+            </a>
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="section-title">
+            <div>
+              <h3>System health</h3>
+              <p>Live API status and capability coverage.</p>
+            </div>
+
+            <span className="live-pill">
+              <i /> {healthLabel}
+            </span>
+          </div>
+
+          <div className="capabilities">
+            {[
+              "OCR + PDF",
+              "Confidence scoring",
+              "Human verification",
+              "Duplicate detection",
+              "Audit trail",
+              "GIS / GeoJSON",
+              "LRMS / DILRMP adapters",
+              "RBAC",
+              "Learning feedback",
+              "Multilingual OCR",
+            ].map((x) => (
+              <span key={x}>✓ {x}</span>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      {error && <div className="error">{error}</div>}
+
       <section className="card">
-        <div className="section-title"><div><h3>System health</h3><p>Live API status and capability coverage.</p></div><span className="live-pill"><i/> {health?.status === "healthy" ? "Healthy" : "Checking"}</span></div>
-        <div className="capabilities">{["OCR + PDF", "Confidence scoring", "Human verification", "Duplicate detection", "Audit trail", "GIS / GeoJSON", "LRMS / DILRMP adapters", "RBAC", "Learning feedback", "Multilingual OCR"].map((x) => <span key={x}>✓ {x}</span>)}</div>
-      </section>
-    </div>
+        <div className="section-title">
+          <div>
+            <h3>
+              {user.role === "citizen"
+                ? "My recent submissions"
+                : user.role === "officer"
+                  ? "Priority verification"
+                  : "Recent system records"}
+            </h3>
 
-    {error && <div className="error">{error}</div>}
-    <section className="card">
-      <div className="section-title"><div><h3>{user.role === "citizen" ? "My recent submissions" : user.role === "officer" ? "Priority verification" : "Recent system records"}</h3><p>{user.role === "citizen" ? "Only your documents are shown." : "Operational records from the demo repository."}</p></div><button className="secondary" onClick={() => go(user.role === "citizen" ? "documents" : user.role === "officer" ? "verification" : "records")}>Open</button></div>
-      <Table docs={docs.slice(0, 7)} />
-    </section>
-  </>;
+            <p>
+              {user.role === "citizen"
+                ? "Only your documents are shown."
+                : "Operational records from the demo repository."}
+            </p>
+          </div>
+
+          <button
+            className="secondary"
+            onClick={() =>
+              go(
+                user.role === "citizen"
+                  ? "documents"
+                  : user.role === "officer"
+                    ? "verification"
+                    : "records"
+              )
+            }
+          >
+            Open
+          </button>
+        </div>
+
+        <Table docs={docs.slice(0, 7)} />
+      </section>
+    </>
+  );
 }
 
 function Validator({ token }) {
